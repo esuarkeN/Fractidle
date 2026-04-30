@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fractidle
+  namespace: fractidle
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-gamedivers
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [fractidle.gamedivers.de]
+      secretName: fractidle-tls
+  rules:
+    - host: fractidle.gamedivers.de
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fractidle-client
+                port:
+                  number: 80

@@ -1,0 +1,12 @@
+node_modules
+dist
+fractidle-website
+
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+.git
+.github
+.env
+.env.*

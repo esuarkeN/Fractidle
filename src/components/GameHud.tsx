@@ -80,7 +80,7 @@ function LabManual() {
   const HelpIcon = SystemIcons.help;
   const tabs = [
     ["basics", "Basics", "Cultures grow fractal organisms in cycles. When a specimen finishes growth, it extracts Essence and starts another cycle."],
-    ["cultures", "Cultures", "Clone cultures to create more simultaneous extraction machines. More specimens improve output, but clone costs now scale with both strain count and total lab density."],
+    ["cultures", "Cultures", "Clone cultures to create more simultaneous extraction machines. More specimens improve output, and clone costs scale per strain."],
     ["complexity", "Genome Complexity", "Genome Complexity controls how large each fractal grows before extraction. Higher complexity improves harvest size but lengthens each cycle."],
     ["genes", "Genes", "Genes are spliced into the Active Genome. They modify growth, extraction, Pattern generation, visuals, and synergies."],
     ["chambers", "Chambers", "Chambers contain specialized strains. Locked chambers show their requirements on the chamber tab and strain cards."],

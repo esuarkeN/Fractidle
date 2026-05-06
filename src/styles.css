@@ -1581,6 +1581,19 @@ p {
   box-shadow: 0 0 24px rgba(255, 218, 122, 0.12);
 }
 
+.render-diagnostics-toggle {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 9;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 218, 122, 0.42);
+  background: rgba(3, 10, 14, 0.86);
+  color: #ffda7a;
+  font-size: 0.66rem;
+}
+
 .render-diagnostics strong {
   color: #ffda7a;
   text-transform: uppercase;

@@ -4,7 +4,6 @@ import * as Tabs from "@radix-ui/react-tabs";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { Microscope, X } from "lucide-react";
 import { useState } from "react";
-import { motion } from "motion/react";
 import { clsx } from "clsx";
 import { RESEARCH_NODES, canPurchaseResearch } from "../game/research";
 import { formatNumber } from "../game/selectors";
@@ -71,12 +70,7 @@ export function ResearchTerminal({ state }: Props) {
                 <Tooltip.Provider key={node.id}>
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
-                      <motion.article
-                        className={clsx("research-node", owned && "owned", !prereqsMet && "blocked")}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.18 }}
-                      >
+                      <article className={clsx("research-node", owned && "owned", !prereqsMet && "blocked")}>
                         <div className="research-node-top">
                           <NodeIcon size={16} />
                           <span>{categoryLabel(node.category)}</span>
@@ -88,7 +82,7 @@ export function ResearchTerminal({ state }: Props) {
                           <PatternIcon size={14} />
                           {owned ? "Authorized" : `Authorize ${formatNumber(node.cost)}`}
                         </button>
-                      </motion.article>
+                      </article>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content className="lab-tooltip" side="top">

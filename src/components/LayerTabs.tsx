@@ -3,8 +3,8 @@ import { clsx } from "clsx";
 import { CORE_DEFINITIONS } from "../game/coreDefinitions";
 import { CORE_LAYERS } from "../game/coreLayers";
 import { getTotalEssencePerSecond } from "../game/coreSimulation";
+import { getAxiomSpeedMultiplier, getEffectiveAxioms, getRuntimeProductionBonuses } from "../game/coreRuntime";
 import type { CoreLayerId } from "../game/coreTypes";
-import { getResearchEffects } from "../game/research";
 import { formatNumber } from "../game/selectors";
 import { getLayerUnlockRequirementText } from "../game/unlocks";
 import type { GameStore } from "../store/gameStore";
@@ -16,20 +16,19 @@ type Props = {
 };
 
 export function LayerTabs({ state, onSelect }: Props) {
-  const researchEffects = getResearchEffects(state.researchPurchasedIds);
   return (
     <nav className="layer-tabs">
       {CORE_LAYERS.map((layer) => {
         const unlocked = state.unlockedLayerIds.includes(layer.id);
         const instances = state.coreInstances.filter((instance) => CORE_DEFINITIONS[instance.definitionId].layerId === layer.id);
-        const effectiveAxioms = state.resources.axioms + state.axiomUpgrades.form * 1.5 + state.axiomUpgrades.recursion * 0.8;
-        const eps = getTotalEssencePerSecond(instances, state.coreUpgrades, state.equippedFormulaIds, effectiveAxioms, 1 + state.axiomUpgrades.growth * 0.08, {
-          growthMultiplier: researchEffects.growthMultiplier,
-          extractionMultiplier: researchEffects.extractionMultiplier,
-          patternMultiplier: researchEffects.patternMultiplier,
-          instabilityBonus: researchEffects.instabilityBonus + state.axiomUpgrades.containment * 0.08,
-          strainMastery: state.strainMastery,
-        });
+        const eps = getTotalEssencePerSecond(
+          instances,
+          state.coreUpgrades,
+          state.equippedFormulaIds,
+          getEffectiveAxioms(state),
+          getAxiomSpeedMultiplier(state),
+          getRuntimeProductionBonuses(state),
+        );
         const Icon = ChamberIcons[layer.id];
         return (
           <Tooltip.Provider key={layer.id}>

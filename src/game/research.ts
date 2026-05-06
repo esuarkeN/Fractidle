@@ -1,4 +1,5 @@
 import type { GameStateSnapshot, ResearchEffect, ResearchNode } from "./types";
+import type { CoreLayerId } from "./coreTypes";
 
 export const RESEARCH_NODES: ResearchNode[] = [
   {
@@ -161,7 +162,7 @@ export function canPurchaseResearch(state: GameStateSnapshot, id: string): boole
   return prerequisitesMet && state.resources.patterns >= node.cost;
 }
 
-export function getResearchEffects(purchasedIds: string[]): Required<Omit<ResearchEffect, "unlockChamberIds">> & { unlockChamberIds: string[]; extraGeneSlots: number } {
+export function getResearchEffects(purchasedIds: string[]): Required<Omit<ResearchEffect, "unlockChamberIds">> & { unlockChamberIds: CoreLayerId[]; extraGeneSlots: number } {
   const purchased = new Set(purchasedIds);
   return RESEARCH_NODES.reduce(
     (effects, node) => {
@@ -186,7 +187,7 @@ export function getResearchEffects(purchasedIds: string[]): Required<Omit<Resear
       offlineCapMultiplier: 0,
       collapseRewardMultiplier: 0,
       instabilityBonus: 0,
-      unlockChamberIds: [] as string[],
+      unlockChamberIds: [] as CoreLayerId[],
     },
   );
 }

@@ -15,8 +15,6 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "clsx": "^2.1.1",
     "lucide-react": "^1.13.0",
-    "motion": "^12.38.0",
-    "pixi.js": "^8.8.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.6.0",

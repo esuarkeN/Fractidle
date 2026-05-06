@@ -1,5 +1,6 @@
 import { BASE_NODE_PRODUCTION, COLLAPSE_THRESHOLD, softCap } from "./balancing";
 import { getTotalEssencePerSecond } from "./coreSimulation";
+import { getAxiomSpeedMultiplier, getEffectiveAxioms, getRuntimeProductionBonuses } from "./coreRuntime";
 import { getFormula } from "./formulas";
 import { getGeneSynergyBonuses } from "./geneSynergies";
 import { getResearchEffects } from "./research";
@@ -32,16 +33,15 @@ function formulaWeight(formula: Formula, state: GameStateSnapshot): number {
 
 export function calculateProduction(state: GameStateSnapshot): ProductionBreakdown {
   if (state.coreInstances?.length) {
-    const effectiveAxioms = state.resources.axioms + state.axiomUpgrades.form * 1.5 + state.axiomUpgrades.recursion * 0.8;
     const researchEffects = getResearchEffects(state.researchPurchasedIds);
-    const axiomSpeedMultiplier = 1 + state.axiomUpgrades.growth * 0.08;
-    const essencePerSecond = getTotalEssencePerSecond(state.coreInstances, state.coreUpgrades, state.equippedFormulaIds, effectiveAxioms, axiomSpeedMultiplier, {
-      growthMultiplier: researchEffects.growthMultiplier,
-      extractionMultiplier: researchEffects.extractionMultiplier,
-      patternMultiplier: researchEffects.patternMultiplier,
-      instabilityBonus: researchEffects.instabilityBonus + state.axiomUpgrades.containment * 0.08,
-      strainMastery: state.strainMastery,
-    });
+    const essencePerSecond = getTotalEssencePerSecond(
+      state.coreInstances,
+      state.coreUpgrades,
+      state.equippedFormulaIds,
+      getEffectiveAxioms(state),
+      getAxiomSpeedMultiplier(state),
+      getRuntimeProductionBonuses(state),
+    );
     const active = equippedFormulas(state);
     const synergy = getGeneSynergyBonuses(state.equippedFormulaIds);
     const patternsPerSecond = active.reduce((total, formula) => total + ((formula.effect.patternPerSecond ?? 0) * Math.max(1, Math.sqrt(state.nodes)) * 0.25), 0)

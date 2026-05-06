@@ -1,7 +1,8 @@
-import { FORMULA_SLOTS, OFFLINE_CAP_SECONDS, SAVE_VERSION, STARTING_NODES } from "./balancing";
+import { FORMULA_SLOTS, getFormulaSlotCount, MAX_EXTRA_FORMULA_SLOTS, OFFLINE_CAP_SECONDS, SAVE_VERSION, STARTING_NODES } from "./balancing";
 import { createCoreInstance, createInitialCoreInstances, createInitialCoreUpgrades } from "./coreBalancing";
 import { CORE_LAYERS } from "./coreLayers";
 import { getUnlockedLayerIds, getTotalEssencePerSecond, normalizeCoreInstances, normalizeCoreUpgrades } from "./coreSimulation";
+import { getAxiomSpeedMultiplier, getEffectiveAxioms, getRuntimeProductionBonuses } from "./coreRuntime";
 import type { CoreInstance } from "./coreTypes";
 import { createInitialFractal } from "./fractalGenerator";
 import { getResearchEffects } from "./research";
@@ -63,7 +64,9 @@ export function createInitialState(): GameStateSnapshot {
 
 function normalizeSave(save: Partial<SaveFile>): GameStateSnapshot {
   const initial = createInitialState();
-  const equipped = Array.isArray(save.equippedFormulaIds) ? save.equippedFormulaIds.slice(0, 5) : initial.equippedFormulaIds;
+  const equipped = Array.isArray(save.equippedFormulaIds)
+    ? save.equippedFormulaIds.slice(0, getFormulaSlotCount(MAX_EXTRA_FORMULA_SLOTS))
+    : initial.equippedFormulaIds;
   while (equipped.length < FORMULA_SLOTS) equipped.push(null);
 
   const savedCoreInstances = "coreInstances" in save ? save.coreInstances : undefined;
@@ -77,7 +80,7 @@ function normalizeSave(save: Partial<SaveFile>): GameStateSnapshot {
   const axiomUpgrades = { ...initial.axiomUpgrades, ...(save as Partial<SaveFile>).axiomUpgrades };
   const researchPurchasedIds = Array.isArray((save as Partial<SaveFile>).researchPurchasedIds) ? (save as Partial<SaveFile>).researchPurchasedIds ?? [] : [];
   const researchEffects = getResearchEffects(researchPurchasedIds);
-  while (equipped.length < FORMULA_SLOTS + Math.min(2, researchEffects.extraGeneSlots)) equipped.push(null);
+  while (equipped.length < getFormulaSlotCount(researchEffects.extraGeneSlots)) equipped.push(null);
   const strainMastery = normalizeStrainMastery((save as Partial<SaveFile>).strainMastery);
   const knownLayerIds = new Set(CORE_LAYERS.map((layer) => layer.id));
   const selectedLayerId = save.selectedLayerId && save.selectedLayerId !== "all" && knownLayerIds.has(save.selectedLayerId) ? save.selectedLayerId : initial.selectedLayerId;
@@ -132,14 +135,14 @@ export function loadGame(): { state: GameStateSnapshot; offlineGain: OfflineGain
     const loaded = normalizeSave(parsed);
     const researchEffects = getResearchEffects(loaded.researchPurchasedIds);
     const elapsedSeconds = Math.min(OFFLINE_CAP_SECONDS * (1 + researchEffects.offlineCapMultiplier), Math.max(0, (Date.now() - (loaded.lastSavedAt || Date.now())) / 1000));
-    const effectiveAxioms = loaded.resources.axioms + loaded.axiomUpgrades.form * 1.5 + loaded.axiomUpgrades.recursion * 0.8;
-    const estimatedEssencePerSecond = getTotalEssencePerSecond(loaded.coreInstances, loaded.coreUpgrades, loaded.equippedFormulaIds, effectiveAxioms, 1 + loaded.axiomUpgrades.growth * 0.08, {
-      growthMultiplier: researchEffects.growthMultiplier,
-      extractionMultiplier: researchEffects.extractionMultiplier,
-      patternMultiplier: researchEffects.patternMultiplier,
-      instabilityBonus: researchEffects.instabilityBonus + loaded.axiomUpgrades.containment * 0.08,
-      strainMastery: loaded.strainMastery,
-    });
+    const estimatedEssencePerSecond = getTotalEssencePerSecond(
+      loaded.coreInstances,
+      loaded.coreUpgrades,
+      loaded.equippedFormulaIds,
+      getEffectiveAxioms(loaded),
+      getAxiomSpeedMultiplier(loaded),
+      getRuntimeProductionBonuses(loaded),
+    );
     const offlineGain = elapsedSeconds >= 10 && estimatedEssencePerSecond > 0
       ? { seconds: elapsedSeconds, essence: estimatedEssencePerSecond * elapsedSeconds }
       : null;

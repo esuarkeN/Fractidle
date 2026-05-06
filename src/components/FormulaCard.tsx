@@ -1,5 +1,4 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { motion } from "motion/react";
 import { clsx } from "clsx";
 import type { Formula } from "../game/types";
 import { formatNumber } from "../game/selectors";
@@ -19,11 +18,7 @@ type Props = {
 export function FormulaCard({ formula, unlocked, equipped, canUnlock, isNew, requirementText, onUnlock, onEquip }: Props) {
   const Icon = GeneIcons[formula.tag];
   return (
-    <motion.article
-      className={clsx("formula-relic gene-card", `tag-${formula.tag}`, unlocked ? "unlocked" : "locked", equipped && "equipped", isNew && "new-discovery")}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.99 }}
-    >
+    <article className={clsx("formula-relic gene-card", `tag-${formula.tag}`, unlocked ? "unlocked" : "locked", equipped && "equipped", isNew && "new-discovery")}>
       <div className="relic-topline">
         <span className="gene-icon"><Icon size={16} /></span>
         <h3>{formula.name}</h3>
@@ -58,6 +53,6 @@ export function FormulaCard({ formula, unlocked, equipped, canUnlock, isNew, req
           {formatNumber(formula.unlockCost)}
         </button>
       )}
-    </motion.article>
+    </article>
   );
 }

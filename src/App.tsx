@@ -11,19 +11,21 @@ import { OfflineProgressModal } from "./components/OfflineProgressModal";
 import { CORE_DEFINITIONS } from "./game/coreDefinitions";
 import { getCoreLayer } from "./game/coreLayers";
 import { getTotalEssencePerSecond } from "./game/coreSimulation";
+import { getAxiomSpeedMultiplier, getEffectiveAxioms, getRuntimeProductionBonuses } from "./game/coreRuntime";
 import { getActiveGeneSynergies } from "./game/geneSynergies";
-import { getResearchEffects } from "./game/research";
 import { formatNumber } from "./game/selectors";
 import { calculateCollapseRequirement } from "./game/simulation";
+import { startGameEngine } from "./game/engine";
 import { ResourceIcons, SystemIcons } from "./ui/icons";
 import { useGameStore } from "./store/gameStore";
 import { Toaster, toast } from "react-hot-toast";
 
 const ResearchTerminal = lazy(() => import("./components/ResearchTerminal").then((module) => ({ default: module.ResearchTerminal })));
 const StrainMasteryPanel = lazy(() => import("./components/StrainMasteryPanel").then((module) => ({ default: module.StrainMasteryPanel })));
+const UI_REFRESH_MS = 250;
 
 export default function App() {
-  const state = useGameStore();
+  const [state, setState] = useState(() => useGameStore.getState());
   const [stagePulse, setStagePulse] = useState("");
   const [collapseReward, setCollapseReward] = useState(0);
   const [floatingEssence, setFloatingEssence] = useState<string | null>(null);
@@ -40,34 +42,49 @@ export default function App() {
   const lastMutationCount = useRef(state.mutationEvents.length);
 
   useEffect(() => {
-    state.hydrate();
+    return startGameEngine();
   }, []);
 
   useEffect(() => {
-    let last = performance.now();
-    let frame = 0;
-    let accumulator = 0;
-    const simulationStep = 1 / 20;
-
-    const loop = (now: number) => {
-      const deltaSeconds = Math.min(0.25, (now - last) / 1000);
-      last = now;
-      accumulator += deltaSeconds;
-      if (accumulator >= simulationStep) {
-        state.tick(Math.min(0.35, accumulator));
-        accumulator = 0;
-      }
-      frame = requestAnimationFrame(loop);
+    let timeout = 0;
+    let lastUpdateAt = 0;
+    const flush = () => {
+      timeout = 0;
+      lastUpdateAt = performance.now();
+      setState(useGameStore.getState());
     };
+    const unsubscribe = useGameStore.subscribe((next, previous) => {
+      const now = performance.now();
+      const importantChange =
+        next.selectedLayerId !== previous.selectedLayerId ||
+        next.feedback.harvestPulse !== previous.feedback.harvestPulse ||
+        next.feedback.formulaPulse !== previous.feedback.formulaPulse ||
+        next.feedback.collapsePulse !== previous.feedback.collapsePulse ||
+        next.unlockedFormulaIds.length !== previous.unlockedFormulaIds.length ||
+        next.researchPurchasedIds.length !== previous.researchPurchasedIds.length ||
+        next.equippedFormulaIds.length !== previous.equippedFormulaIds.length ||
+        next.offlineNotice !== previous.offlineNotice;
 
-    frame = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(frame);
-  }, [state.tick]);
+      if (importantChange || now - lastUpdateAt >= UI_REFRESH_MS) {
+        if (timeout) {
+          window.clearTimeout(timeout);
+          timeout = 0;
+        }
+        flush();
+        return;
+      }
 
-  useEffect(() => {
-    const interval = window.setInterval(() => state.save(), 5000);
-    return () => window.clearInterval(interval);
-  }, [state.save]);
+      if (!timeout) {
+        timeout = window.setTimeout(flush, UI_REFRESH_MS - (now - lastUpdateAt));
+      }
+    });
+
+    flush();
+    return () => {
+      unsubscribe();
+      if (timeout) window.clearTimeout(timeout);
+    };
+  }, []);
 
   useEffect(() => {
     const now = performance.now();
@@ -138,21 +155,20 @@ export default function App() {
 
   const resetSave = () => {
     if (window.confirm("Purge all Recursive Bloom lab records?")) {
-      state.reset();
+      useGameStore.getState().reset();
     }
   };
   const activeChamber = getCoreLayer(state.selectedLayerId);
   const activeSynergies = getActiveGeneSynergies(state.equippedFormulaIds);
   const visibleSpecimens = state.coreInstances.filter((instance) => CORE_DEFINITIONS[instance.definitionId].layerId === state.selectedLayerId);
-  const researchEffects = getResearchEffects(state.researchPurchasedIds);
-  const effectiveAxioms = state.resources.axioms + state.axiomUpgrades.form * 1.5 + state.axiomUpgrades.recursion * 0.8;
-  const chamberExtraction = getTotalEssencePerSecond(visibleSpecimens, state.coreUpgrades, state.equippedFormulaIds, effectiveAxioms, 1 + state.axiomUpgrades.growth * 0.08, {
-    growthMultiplier: researchEffects.growthMultiplier,
-    extractionMultiplier: researchEffects.extractionMultiplier,
-    patternMultiplier: researchEffects.patternMultiplier,
-    instabilityBonus: researchEffects.instabilityBonus + state.axiomUpgrades.containment * 0.08,
-    strainMastery: state.strainMastery,
-  });
+  const chamberExtraction = getTotalEssencePerSecond(
+    visibleSpecimens,
+    state.coreUpgrades,
+    state.equippedFormulaIds,
+    getEffectiveAxioms(state),
+    getAxiomSpeedMultiplier(state),
+    getRuntimeProductionBonuses(state),
+  );
   const collapseReady = state.currentRunLifetimeEssence >= calculateCollapseRequirement(state);
   const chamberStatus = collapseReady ? "COLLAPSE READY" : state.mutationEvents.length > 0 ? "MUTATING" : visibleSpecimens.some((instance) => instance.currentState === "building") ? "GROWING" : "STABLE";
 
@@ -185,15 +201,7 @@ export default function App() {
             </>
           )}
         >
-          <FractalCanvas
-            instances={state.coreInstances}
-            upgrades={state.coreUpgrades}
-            selectedLayerId={state.selectedLayerId}
-            equippedFormulaIds={state.equippedFormulaIds}
-            harvestPulse={state.feedback.harvestPulse}
-            formulaPulse={state.feedback.formulaPulse}
-            collapsePulse={state.feedback.collapsePulse}
-          />
+          <FractalCanvas />
         </ObservationChamber>
         <aside className="right-rail">
           <CoreShop state={state} />

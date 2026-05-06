@@ -1,6 +1,5 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
 import type { ComponentType } from "react";
-import { motion } from "motion/react";
 import { clsx } from "clsx";
 import {
   getComplexityUpgradeCost,
@@ -63,7 +62,7 @@ export function CoreShop({ state }: Props) {
           const Icon = StrainIcons[definition.fractalType];
 
           return (
-            <motion.article className={clsx("core-card culture-card", owned > 0 ? "unlocked" : "locked")} key={definitionId} whileHover={{ y: -2 }} whileTap={{ scale: 0.995 }}>
+            <article className={clsx("core-card culture-card", owned > 0 ? "unlocked" : "locked")} key={definitionId}>
               <div className="core-card-main">
                 <h3><Icon size={17} /> {definition.name}</h3>
                 <span>
@@ -78,7 +77,7 @@ export function CoreShop({ state }: Props) {
                 <ShopButton icon={ActionIcons.extraction} label="Yield" cost={yieldCost} disabled={owned <= 0 || state.resources.essence < yieldCost} tooltip="Refine Essence extraction yield" onClick={() => state.upgradeCoreYield(definitionId)} />
                 <ShopButton icon={ActionIcons.growth} label="Growth" cost={speedCost} disabled={owned <= 0 || state.resources.essence < speedCost} tooltip="Accelerate culture growth rate" onClick={() => state.upgradeCoreSpeed(definitionId)} />
               </div>
-            </motion.article>
+            </article>
           );
         })}
       </div>

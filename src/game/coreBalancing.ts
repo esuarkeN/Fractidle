@@ -41,7 +41,7 @@ export function getOwnedCoreCount(instances: CoreInstance[], definitionId: CoreD
 export function getCoreInstanceCost(instances: CoreInstance[], definitionId: CoreDefinitionId): number {
   const definition = CORE_DEFINITIONS[definitionId];
   const owned = getOwnedCoreCount(instances, definitionId);
-  return Math.floor(definition.baseCost * Math.pow(definition.costMultiplier, owned) * Math.pow(1.04, Math.max(0, instances.length - 1)));
+  return Math.floor(definition.baseCost * Math.pow(definition.costMultiplier, owned));
 }
 
 export function getComplexityUpgradeCost(upgrade: CoreTypeUpgrade, definitionId: CoreDefinitionId): number {

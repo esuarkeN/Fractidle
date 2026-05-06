@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { FORMULA_SLOTS, getAxiomUpgradeCost } from "../game/balancing";
+import { getAxiomUpgradeCost, getFormulaSlotCount } from "../game/balancing";
 import {
   createCoreInstance,
   getComplexityUpgradeCost,
@@ -9,8 +9,9 @@ import {
   getYieldUpgradeCost,
 } from "../game/coreBalancing";
 import { CORE_DEFINITIONS } from "../game/coreDefinitions";
+import { getAxiomSpeedMultiplier, getEffectiveAxioms, getRuntimeProductionBonuses } from "../game/coreRuntime";
 import { getUnlockedLayerIds, isCoreDefinitionAvailable, tickCoreInstancesForSelectedChamber } from "../game/coreSimulation";
-import type { CoreDefinitionId, CoreLayerId } from "../game/coreTypes";
+import type { CoreDefinitionId, CoreHarvest, CoreLayerId } from "../game/coreTypes";
 import { createInitialFractal } from "../game/fractalGenerator";
 import { getFormula } from "../game/formulas";
 import { getActiveGeneSynergies } from "../game/geneSynergies";
@@ -19,7 +20,7 @@ import { canPurchaseResearch, getResearchEffects, getResearchNode } from "../gam
 import { canUnlockFormula } from "../game/selectors";
 import { clearSave, createInitialState, loadGame, saveGame } from "../game/save";
 import { calculateStableMutationsGain, calculateProduction, simulate } from "../game/simulation";
-import type { GameStateSnapshot } from "../game/types";
+import type { GameStateSnapshot, MutationEvent } from "../game/types";
 import type { AxiomUpgradeId } from "../game/types";
 
 type GameActions = {
@@ -56,23 +57,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set((state) => {
       const simulated = simulate(state, deltaSeconds);
       const researchEffects = getResearchEffects(simulated.researchPurchasedIds);
-      const effectiveAxioms = simulated.resources.axioms + simulated.axiomUpgrades.form * 1.5 + simulated.axiomUpgrades.recursion * 0.8;
-      const axiomSpeedMultiplier = 1 + simulated.axiomUpgrades.growth * 0.08;
       const coreTick = tickCoreInstancesForSelectedChamber(
         simulated.coreInstances,
         simulated.coreUpgrades,
         simulated.equippedFormulaIds,
-        effectiveAxioms,
+        getEffectiveAxioms(simulated),
         deltaSeconds,
         simulated.selectedLayerId,
-        axiomSpeedMultiplier,
-        {
-          growthMultiplier: researchEffects.growthMultiplier,
-          extractionMultiplier: researchEffects.extractionMultiplier,
-          patternMultiplier: researchEffects.patternMultiplier,
-          instabilityBonus: researchEffects.instabilityBonus + simulated.axiomUpgrades.containment * 0.08,
-          strainMastery: simulated.strainMastery,
-        },
+        getAxiomSpeedMultiplier(simulated),
+        getRuntimeProductionBonuses(simulated),
       );
       const didHarvest = coreTick.harvests.length > 0;
       const nextResources = {
@@ -80,8 +73,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         essence: simulated.resources.essence + coreTick.essenceGained,
         patterns: simulated.resources.patterns + coreTick.patternsGained,
       };
-      const nextMastery = { ...simulated.strainMastery };
+      let nextMastery = simulated.strainMastery;
       for (const harvest of coreTick.harvests) {
+        if (nextMastery === simulated.strainMastery) nextMastery = { ...simulated.strainMastery };
         const instance = coreTick.instances.find((item) => item.id === harvest.instanceId);
         const mastery = nextMastery[harvest.definitionId] ?? { harvests: 0, lifetimeEssence: 0, highestComplexity: 0, peakOwned: 0 };
         const ownedCount = coreTick.instances.filter((item) => item.definitionId === harvest.definitionId).length;
@@ -100,13 +94,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const nextRunPatternsEarned = simulated.totalPatternsEarned + coreTick.patternsGained + mutationPatterns;
       const essenceReached = Math.max(nextRunLifetimeEssence, nextResources.essence + mutationEssence, simulated.totalEssenceEarned + coreTick.essenceGained + mutationEssence);
       const patternsReached = Math.max(nextResources.patterns + mutationPatterns, nextRunPatternsEarned);
-      const unlockedLayerIds = [
-        ...new Set([
-          ...simulated.unlockedLayerIds,
-          ...getUnlockedLayerIds(coreTick.instances, essenceReached, patternsReached, simulated.resources.axioms),
-          ...researchEffects.unlockChamberIds,
-        ]),
-      ] as CoreLayerId[];
+      const candidateLayerIds = getUnlockedLayerIds(coreTick.instances, essenceReached, patternsReached, simulated.resources.axioms);
+      const unlockedLayerIds = mergeUniqueOrSame<CoreLayerId>(simulated.unlockedLayerIds, candidateLayerIds, researchEffects.unlockChamberIds);
+      const discoveredSynergyIds = mergeUniqueOrSame(simulated.discoveredSynergyIds, activeSynergies);
       const nextState = {
         ...simulated,
         coreInstances: coreTick.instances,
@@ -117,8 +107,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
           patterns: nextResources.patterns + mutationPatterns,
         },
         strainMastery: nextMastery,
-        discoveredSynergyIds: [...new Set([...simulated.discoveredSynergyIds, ...activeSynergies])],
-        mutationEvents: [...simulated.mutationEvents, ...mutationEvents].slice(-20),
+        discoveredSynergyIds,
+        mutationEvents: mutationEvents.length ? [...simulated.mutationEvents, ...mutationEvents].slice(-20) : simulated.mutationEvents,
         totalEssenceEarned: simulated.totalEssenceEarned + coreTick.essenceGained + mutationEssence,
         totalPatternsEarned: nextRunPatternsEarned,
         currentRunLifetimeEssence: nextRunLifetimeEssence,
@@ -215,7 +205,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!node || !canPurchaseResearch(state, researchId)) return;
     const effects = getResearchEffects([...state.researchPurchasedIds, researchId]);
     const nextEquipped = [...state.equippedFormulaIds];
-    while (nextEquipped.length < 3 + Math.min(2, effects.extraGeneSlots)) nextEquipped.push(null);
+    while (nextEquipped.length < getFormulaSlotCount(effects.extraGeneSlots)) nextEquipped.push(null);
     set({
       resources: { ...state.resources, patterns: state.resources.patterns - node.cost },
       researchPurchasedIds: [...state.researchPurchasedIds, researchId],
@@ -245,7 +235,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   unequipFormula: (slotIndex) => {
     const state = get();
-    if (slotIndex < 0 || slotIndex >= FORMULA_SLOTS) return;
+    if (slotIndex < 0 || slotIndex >= state.equippedFormulaIds.length) return;
     const equipped = [...state.equippedFormulaIds];
     equipped[slotIndex] = null;
     set({ equippedFormulaIds: equipped });
@@ -269,7 +259,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const retainedResearchCount = Math.min(state.researchPurchasedIds.length, state.axiomUpgrades.genomeArchive > 0 ? Math.ceil(state.researchPurchasedIds.length * Math.min(0.75, state.axiomUpgrades.genomeArchive * 0.18)) : 0);
     const retainedResearch = state.researchPurchasedIds.slice(0, retainedResearchCount);
     const retainedResearchEffects = getResearchEffects(retainedResearch);
-    const nextEquippedLength = Math.max(FORMULA_SLOTS, FORMULA_SLOTS + Math.min(2, retainedResearchEffects.extraGeneSlots));
+    const nextEquippedLength = getFormulaSlotCount(retainedResearchEffects.extraGeneSlots);
     set({
       resources: { essence: 0, patterns: state.axiomUpgrades.patternImprint * 6, axioms: state.resources.axioms + reward },
       nodes: Math.max(1, Math.floor(state.nodes * complexityMemory)),
@@ -319,26 +309,42 @@ export const useGameStore = create<GameStore>((set, get) => ({
   dismissOfflineNotice: () => set({ offlineNotice: null }),
 }));
 
-function maybeCreateMutationEvents(state: GameStateSnapshot, harvests: Array<{ instanceId: string; definitionId: CoreDefinitionId; essence: number; patterns: number }>, instabilityBonus: number) {
-  const events = [];
+function maybeCreateMutationEvents(state: GameStateSnapshot, harvests: CoreHarvest[], instabilityBonus: number): MutationEvent[] {
+  const events: MutationEvent[] = [];
+  const createdAt = Date.now();
   for (const harvest of harvests) {
     const definition = CORE_DEFINITIONS[harvest.definitionId];
     const unstable = definition.fractalType === "lightning" || definition.fractalType === "mutation" || state.equippedFormulaIds.includes("entropic-bargain");
     if (!unstable) continue;
-    const roll = (Date.now() + harvest.instanceId.length * 7919 + harvest.essence) % 100;
+    const roll = (createdAt + harvest.instanceId.length * 7919 + harvest.essence) % 100;
     const chance = 10 + instabilityBonus * 18 + (definition.fractalType === "mutation" ? 12 : 0);
     if (roll > chance) continue;
     const severe = roll < 8;
     events.push({
-      id: `${harvest.instanceId}-${Date.now()}-${events.length}`,
+      id: `${harvest.instanceId}-${createdAt}-${events.length}`,
       sourceCultureId: harvest.instanceId,
       type: severe ? "Aberrant Bloom" as const : "Split Genome" as const,
       severity: severe ? 2 : 1,
       essence: harvest.essence * (severe ? 0.5 : 0.18),
       patterns: harvest.patterns + (severe ? 0.6 : 0.18),
       message: severe ? "Aberrant bloom stabilized." : "Split genome produced Genetic Patterns.",
-      createdAt: Date.now(),
+      createdAt,
     });
   }
   return events;
+}
+
+function mergeUniqueOrSame<T>(current: T[], ...sources: T[][]): T[] {
+  let changed = false;
+  const seen = new Set(current);
+  const next = [...current];
+  for (const source of sources) {
+    for (const item of source) {
+      if (seen.has(item)) continue;
+      seen.add(item);
+      next.push(item);
+      changed = true;
+    }
+  }
+  return changed ? next : current;
 }

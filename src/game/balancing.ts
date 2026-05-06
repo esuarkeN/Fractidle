@@ -1,6 +1,7 @@
 export const SAVE_VERSION = 3;
 export const STARTING_NODES = 1;
 export const FORMULA_SLOTS = 3;
+export const MAX_EXTRA_FORMULA_SLOTS = 2;
 export const BASE_NODE_PRODUCTION = 1.15;
 export const NODE_BASE_COST = 10;
 export const NODE_COST_GROWTH = 1.145;
@@ -22,4 +23,8 @@ export function getCollapseProgress(essence: number, requirement = COLLAPSE_THRE
 
 export function getAxiomUpgradeCost(currentLevel: number): number {
   return Math.max(1, Math.floor((currentLevel + 1) * Math.pow(1.65, currentLevel)));
+}
+
+export function getFormulaSlotCount(extraGeneSlots = 0): number {
+  return FORMULA_SLOTS + Math.min(MAX_EXTRA_FORMULA_SLOTS, Math.max(0, extraGeneSlots));
 }
